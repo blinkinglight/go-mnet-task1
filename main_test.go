@@ -142,6 +142,62 @@ func TestMainShot2(t *testing.T) {
 		t.Fatalf("%s", b1)
 	}
 }
+
+func TestMainShot3(t *testing.T) {
+
+	nd, err := net.Dial("tcp", "127.0.0.1:9999")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	nd.Write([]byte("START test\n"))
+	b, err := _readBytes(nd)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(b) != "WALK zombie 1 0\n" {
+		t.Fatal()
+	}
+
+	nd.Write([]byte("SHOOT 1 0\n"))
+
+	b1, err := _readBytes(nd)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(b1) != "BOOM test 1 zombie\n" {
+		t.Fatalf("%s", b1)
+	}
+
+	nd.Write([]byte("START test\n"))
+	b3, err := _readBytes(nd)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(b3) != "WALK zombie 1 0\n" {
+		t.Fatal()
+	}
+
+	nd.Write([]byte("SHOOT 1 0\n"))
+
+	b4, err := _readBytes(nd)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(b4) != "BOOM test 2 zombie\n" {
+		t.Fatalf("%s", b1)
+	}
+}
+
 func _readBytes(nc net.Conn) ([]byte, error) {
 	rb := make([]byte, 1024)
 	n, err := nc.Read(rb)
