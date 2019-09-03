@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -48,6 +49,7 @@ func NewBoard(c net.Conn) *Board {
 		points:  make(map[string]int),
 		running: 0,
 	}
+	b.initContext()
 	go b.Reader()
 	return b
 }
@@ -69,6 +71,12 @@ type Board struct {
 	alive   bool
 	points  map[string]int
 	running int32
+	ctx     context.Context
+	cfn     context.CancelFunc
+}
+
+func (b *Board) initContext() {
+	b.ctx, b.cfn = context.WithCancel(context.Background())
 }
 
 func (b *Board) Send(s string) error {
@@ -81,7 +89,9 @@ func (b *Board) Reader() {
 	for {
 		s, err := reader.ReadString('\n')
 		if err != nil {
-			log.Printf("%v", err)
+			if b.cfn != nil {
+				b.cfn()
+			}
 			break
 		}
 
@@ -104,35 +114,47 @@ func (b *Board) Reader() {
 }
 
 func (b *Board) Shoot(args string) {
+	if atomic.LoadInt32(&b.running) == 0 {
+		return
+	}
+
 	var p Point
 	fmt.Sscanf(args, "%d %d", &p.X, &p.Y)
 	if p.Equals(b.zpos) && b.alive {
 		b.alive = false
 		b.cBoom(true)
-	} else {
-		b.cBoom(false)
+		return
 	}
+	b.cBoom(false)
 }
 
 func (b *Board) Zombie(p string) {
 	if !atomic.CompareAndSwapInt32(&b.running, 0, 1) {
 		return
 	}
+	b.initContext()
 	b.p = p
 	if _, ok := b.points[p]; !ok {
 		b.points[p] = 0
 	}
 	b.alive = true
 	b.zpos = Point{0, 0}
-	for b.alive {
-		b.zpos.X++
-		b.cWalkTo(b.zpos)
-		time.Sleep(2 * time.Second)
+	ticker := time.NewTicker(2 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			b.zpos.X++
+			b.cWalkTo(b.zpos)
+		case <-b.ctx.Done():
+			ticker.Stop()
+			return
+		}
 	}
 }
 
 func (b *Board) cBoom(s bool) error {
 	if s && atomic.CompareAndSwapInt32(&b.running, 1, 0) {
+		b.cfn()
 		b.points[b.p]++
 		return b.Send(fmt.Sprintf("BOOM %s %d %s\n", b.p, b.points[b.p], "zombie"))
 	}

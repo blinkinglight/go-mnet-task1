@@ -182,7 +182,7 @@ func TestMainShot3(t *testing.T) {
 	}
 
 	if string(b3) != "WALK zombie 1 0\n" {
-		t.Fatal()
+		t.Fatalf("%v", b3)
 	}
 
 	nd.Write([]byte("SHOOT 1 0\n"))
